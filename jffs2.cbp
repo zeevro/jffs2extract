@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="jffs2" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/jffs2" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+					<Add directory="include" />
+				</Compiler>
+				<Linker>
+					<Add library="../../../../../usr/lib/x86_64-linux-gnu/libz.a" />
+				</Linker>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/jffs2" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall" />
+		</Compiler>
+		<Unit filename="include/byteswap-osx.h" />
+		<Unit filename="include/common.h" />
+		<Unit filename="include/jffs2-user.h" />
+		<Unit filename="include/jffs2.h" />
+		<Unit filename="include/lzoconf.h" />
+		<Unit filename="include/lzodefs.h" />
+		<Unit filename="include/minilzo.h" />
+		<Unit filename="include/xalloc.h" />
+		<Unit filename="jffs2extract.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="minilzo.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Extensions>
+			<envvars />
+			<code_completion />
+			<lib_finder disable_auto="1" />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

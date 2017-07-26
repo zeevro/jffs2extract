@@ -52,7 +52,7 @@
 
 #define SCRATCH_SIZE (5*1024*1024)
 
-char extract_path[100];
+char extract_path[256];
 
 /* macro to avoid "lvalue required as left operand of assignment" error */
 #define ADD_BYTES(p, n)		((p) = (typeof(p))((char *)(p) + (n)))
@@ -105,7 +105,7 @@ void putblock(char *b, size_t bsize, size_t * rsize,
 		struct jffs2_raw_inode *n)
 {
 	uLongf dlen = je32_to_cpu(n->dsize);
-	
+#if 0
 	if (je32_to_cpu(n->isize) > bsize || (je32_to_cpu(n->offset) + dlen) > bsize)
 		errmsg_die("File does not fit into buffer!");
 
@@ -135,6 +135,36 @@ void putblock(char *b, size_t bsize, size_t * rsize,
 	}
 
 	*rsize = je32_to_cpu(n->dsize);
+	#else
+	
+	if (je32_to_cpu(n->dsize) > bsize)
+		errmsg_die("File does not fit into buffer!");
+	bzero(b,bsize);
+	
+	switch (n->compr) {
+		case JFFS2_COMPR_ZLIB:
+			uncompress((Bytef *) b, &dlen,
+					(Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
+					(uLongf) je32_to_cpu(n->csize));
+			break;
+
+		case JFFS2_COMPR_NONE:
+			memcpy(b ,((char *) n) + sizeof(struct jffs2_raw_inode), dlen);
+			break;
+
+		case JFFS2_COMPR_ZERO:
+			bzero(b + je32_to_cpu(n->offset), dlen);
+			break;
+
+			/* [DYN]RUBIN support required! */
+
+		default:
+			errmsg_die("Unsupported compression method!");
+	}
+
+	*rsize = je32_to_cpu(n->dsize);
+	#endif
+	
 }
 
 /* adds/removes directory node into dir struct. */
@@ -152,10 +182,10 @@ struct dir *putdir(struct dir *dd, struct jffs2_raw_dirent *n)
 	struct dir *o, *d, *p;
 
 	o = dd;
-
 	if (je32_to_cpu(n->ino)) {
 		if (dd == NULL) {
 			d = xmalloc(sizeof(struct dir));
+			memset(d,0,sizeof(struct dir));
 			d->type = n->type;
 			memcpy(d->name, n->name, n->nsize);
 			d->nsize = n->nsize;
@@ -176,6 +206,7 @@ struct dir *putdir(struct dir *dd, struct jffs2_raw_dirent *n)
 
 			if (dd->next == NULL) {
 				dd->next = xmalloc(sizeof(struct dir));
+				memset(dd->next,0,sizeof(struct dir));
 				dd->next->type = n->type;
 				memcpy(dd->next->name, n->name, n->nsize);
 				dd->next->nsize = n->nsize;
@@ -270,9 +301,9 @@ void get_node_data(char *r_buf,struct dir *d_list,size_t size)
 	 union jffs2_node_union *mp = NULL;  /* minimum position */
 
 
-	 printf("file name:%s size:%d\n",d_list->name,nsize);
 
 	 buf =xmalloc(4096);
+	 memset(buf,0,4096);
 	 buf_write = buf;
 	 n = (union jffs2_node_union *) r_buf;
 
@@ -298,12 +329,11 @@ void get_node_data(char *r_buf,struct dir *d_list,size_t size)
 			 else
 			 {
 			     ADD_BYTES(n, ((je32_to_cpu(n->u.totlen) + 3) & ~3));
-			      
+
 			 }
 		 }
 	 } while (n < e);
 
-    printf("file size:%d content:%s \n",read_size,buf);
 }
 
 
@@ -381,6 +411,7 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 		if (d->type == DT_DIR) {
 			char *tmp;
 			tmp = xmalloc(BUFSIZ);
+			memset(tmp,0,BUFSIZ);
 			sprintf(tmp, "%s/%s", path, d->name);
 			visit(o, size, tmp, verbose, visitor);
 			free(tmp);
@@ -851,30 +882,31 @@ void visit(char *buf, size_t size, const char *path, int verbose, visitor visito
 	if (ino == 0 ||
 			(dd == NULL && ino == 0) || (dd != NULL && dd->type != DT_DIR))
 		errmsg_die("%s: No such file or directory", path ? path : "/");
-
+    // issue on decoding file name......fuck
 	d = collectdir(buf, size, ino, d);
-
 	visitdir(buf, size, d, path, verbose, visitor);
 	freedir(d);
 }
 
 void do_extract_dir()
 {
-    
+
 	int real_size = 0;
 	int doc_exist = 0;
-	
+
 	getcwd(extract_path,sizeof(extract_path));
 	strcat(extract_path,"/kernel_fs");
-	
+
 	doc_exist = access(extract_path,0);
 	printf("file exist: %d \n",doc_exist);
 
-	if(doc_exist < 0)
+	if(doc_exist >= 0)
 	{
-	     mkdir(extract_path, 0777);
-		 printf("do create dir \n");
+	   system("rm -rf $PWD/kernel_fs");
 	}
+	
+	mkdir(extract_path, 0777);
+	printf("do create dir \n");
 }
 
 /* writes file specified by path to the buffer */
@@ -891,14 +923,14 @@ void do_extract_dir()
 void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct jffs2_raw_inode *ri, uint32_t size, const char *path, int verbose)
 {
     char fnbuf[4096];
+
     int fd = -1;
     size_t sz = 0;
-	
-    snprintf(fnbuf, sizeof(fnbuf), "%s/%s", extract_path, d->name);
-   
+
+    snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s",extract_path, path, d->name);
+
+    printf("name : %s  \n",fnbuf);
 	//snprintf(fnbuf, sizeof(fnbuf), "%s%s","/kernel_fs/", d->name);
-    printf("path:%s \n",fnbuf);
-	printf("raw node size:%d \n",ri->isize);
     switch(m) {
         case '/':
             if(mkdir(fnbuf, 0777) && errno != EEXIST) {
@@ -913,9 +945,12 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
             } else {
                 while(ri) {
                     char buf[16384];
+					int w_cnt = 0;
                     putblock(buf, sizeof(buf), &sz, ri);
-					
-                    write(fd, buf, sz);
+					printf("write size:%d \n",sz);
+                    w_cnt = write(fd, buf, sz);
+					if(w_cnt != sz)
+						sys_errmsg_die("Failed to write files \n");
                     ri = find_raw_inode(imagebuf, imagesize, d->ino, je32_to_cpu(ri->version));
                 }
             }
@@ -924,6 +959,10 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
             warnmsg("Not extracting special file %s", fnbuf);
             break;
     }
+	
+	if(fd >= 0)
+		printf("close:%d \n",close(fd));
+	
 }
 
 
@@ -988,7 +1027,7 @@ int main(int argc, char **argv)
 
 
     buf = xmalloc(BUFFER_SIZE);
-
+    memset(buf,0,BUFFER_SIZE);
     while((bytes = read(fd, buf + filesize, BUFFER_SIZE)) == BUFFER_SIZE) {
         filesize += bytes;
         buf = xrealloc(buf, filesize + BUFFER_SIZE);
@@ -996,6 +1035,7 @@ int main(int argc, char **argv)
     filesize += bytes;
     visit(buf, filesize, NULL, verbose, v);
 
+    close(fd);
 	free(buf);
 	exit(EXIT_SUCCESS);
 }

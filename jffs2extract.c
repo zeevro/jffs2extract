@@ -379,7 +379,7 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 				break;
 
 			case DT_LNK:
-				m = ' ';
+				m = '>';
 				break;
 
 			case DT_SOCK:
@@ -923,10 +923,12 @@ void do_extract_dir()
 void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct jffs2_raw_inode *ri, uint32_t size, const char *path, int verbose)
 {
     char fnbuf[4096];
-
+    char current_path[4096];
     int fd = -1;
     size_t sz = 0;
-
+    bzero(current_path,4096);
+	bzero(fnbuf,4096);
+	
     snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s",extract_path, path, d->name);
 
     printf("name : %s  \n",fnbuf);
@@ -955,6 +957,18 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
                 }
             }
             break;
+		case '>':
+			{
+				char buf[256];
+				bzero(buf,256);
+				putblock(buf, sizeof(buf), &sz, ri);
+				//buf save the name of the linked file
+				
+				snprintf(current_path, sizeof(current_path), "%s%s/%s",extract_path, path, buf);
+				printf("cur:%s \n",current_path);
+				symlink(buf,fnbuf);
+			}
+			break;
         default:
             warnmsg("Not extracting special file %s", fnbuf);
             break;

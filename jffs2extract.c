@@ -159,7 +159,11 @@ void putblock(char *b, size_t bsize, size_t * rsize,
 			/* [DYN]RUBIN support required! */
 
 		default:
-			errmsg_die("Unsupported compression method!");
+			//errmsg_die("Unsupported compression method!");
+			//change to default
+			uncompress((Bytef *) b, &dlen,
+					(Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
+					(uLongf) je32_to_cpu(n->csize));
 	}
 
 	*rsize = je32_to_cpu(n->dsize);
@@ -397,7 +401,6 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 			d = d->next;
 			continue;
 		}
-		printf("file size:%d \n",ri->isize);
 		/* Search for newer versions of the inode */
 		//the same node but with the different version , the highest version is what we want the inode
 		tmpi = ri;
@@ -898,15 +901,12 @@ void do_extract_dir()
 	strcat(extract_path,"/kernel_fs");
 
 	doc_exist = access(extract_path,0);
-	printf("file exist: %d \n",doc_exist);
-
 	if(doc_exist >= 0)
 	{
 	   system("rm -rf $PWD/kernel_fs");
 	}
 	
 	mkdir(extract_path, 0777);
-	printf("do create dir \n");
 }
 
 /* writes file specified by path to the buffer */
@@ -931,7 +931,6 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
 	
     snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s",extract_path, path, d->name);
 
-    printf("name : %s  \n",fnbuf);
 	//snprintf(fnbuf, sizeof(fnbuf), "%s%s","/kernel_fs/", d->name);
     switch(m) {
         case '/':
@@ -941,15 +940,16 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
             break;
         case ' ':
             if(verbose) printf("%s\n", fnbuf);
-            fd = open(fnbuf, O_WRONLY|O_CREAT, 0666);
+            fd = open(fnbuf, O_WRONLY|O_CREAT, 0777);
             if(fd < 0) {
                 warnmsg("Failed to create %s: %s", fnbuf, strerror(errno));
             } else {
                 while(ri) {
                     char buf[16384];
 					int w_cnt = 0;
+					printf("put block:%s \n",fnbuf);
                     putblock(buf, sizeof(buf), &sz, ri);
-					printf("write size:%d \n",sz);
+					
                     w_cnt = write(fd, buf, sz);
 					if(w_cnt != sz)
 						sys_errmsg_die("Failed to write files \n");

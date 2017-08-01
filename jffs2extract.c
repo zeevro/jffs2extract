@@ -648,7 +648,7 @@ struct dir *collectdir(char *o, size_t size, uint32_t ino, struct dir *d)
 
 		if (n < e && je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK) {
 			if (je16_to_cpu(n->u.nodetype) == JFFS2_NODETYPE_DIRENT &&
-				je32_to_cpu(n->d.pino) == ino && (v = je32_to_cpu(n->d.version)) > vcur) {
+				je32_to_cpu(n->d.pino) == ino && ((v = je32_to_cpu(n->d.version)) > vcur || (je32_to_cpu(n->d.version) == 0))) {
 				/* XXX crc check */
 
 				if (vmaxt < v)
@@ -658,11 +658,12 @@ struct dir *collectdir(char *o, size_t size, uint32_t ino, struct dir *d)
 					mp = n;
 				}
 
-				if (v == (vcur + 1)) {
+				if (v == (vcur + 1) || v == 0) {
 					d = putdir(d, &(n->d));
 
 					lr = n;
-					vcur++;
+					if(v != 0)
+					    vcur++;
 					vmint = ~((uint32_t) 0);
 				}
 			}
@@ -1117,3 +1118,4 @@ int main(int argc, char **argv)
 	free(buf);
 	exit(EXIT_SUCCESS);
 }
+

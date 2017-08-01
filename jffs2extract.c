@@ -89,7 +89,47 @@ struct jffs2_raw_dirent *resolvepath(char *, size_t, uint32_t, const char *,
 
 typedef void (*visitor)(char* imagebuf, size_t imagesize, struct dir *d, char m,
     struct jffs2_raw_inode *ri, uint32_t len, const char *path, int verbose);
+
+
+
 void visit(char *o, size_t size, const char *path, int verbose, visitor visitor);
+
+
+static int rtime_decompress(unsigned char *data_in, unsigned char *cpage_out,
+		uint32_t srclen, uint32_t destlen)
+{
+	short positions[256];
+	int outpos = 0;
+	int pos=0;
+
+	memset(positions,0,sizeof(positions));
+
+	while (outpos<destlen) {
+		unsigned char value;
+		int backoffs;
+		int repeat;
+
+		value = data_in[pos++];
+		cpage_out[outpos++] = value; /* first the verbatim copied byte */
+		repeat = data_in[pos++];
+		backoffs = positions[value];
+
+		positions[value]=outpos;
+		if (repeat) {
+			if (backoffs + repeat >= outpos) {
+				while(repeat) {
+					cpage_out[outpos++] = cpage_out[backoffs++];
+					repeat--;
+				}
+			} else {
+				memcpy(&cpage_out[outpos],&cpage_out[backoffs],repeat);
+				outpos+=repeat;
+			}
+		}
+	}
+	return 0;
+}
+
 
 /* writes file node into buffer, to the proper position. */
 /* reading all valid nodes in version order reconstructs the file. */
@@ -136,11 +176,11 @@ void putblock(char *b, size_t bsize, size_t * rsize,
 
 	*rsize = je32_to_cpu(n->dsize);
 	#else
-	
+
 	if (je32_to_cpu(n->dsize) > bsize)
 		errmsg_die("File does not fit into buffer!");
 	bzero(b,bsize);
-	
+	printf("com size;%d org size: %d compress: %d \n",je32_to_cpu(n->csize),je32_to_cpu(n->dsize),n->compr);
 	switch (n->compr) {
 		case JFFS2_COMPR_ZLIB:
 			uncompress((Bytef *) b, &dlen,
@@ -155,20 +195,22 @@ void putblock(char *b, size_t bsize, size_t * rsize,
 		case JFFS2_COMPR_ZERO:
 			bzero(b + je32_to_cpu(n->offset), dlen);
 			break;
-
+		case JFFS2_COMPR_RTIME:
+			rtime_decompress((Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
+				        (Bytef *)b, je32_to_cpu(n->csize),dlen);
+			break;
 			/* [DYN]RUBIN support required! */
-
 		default:
-			//errmsg_die("Unsupported compression method!");
+			errmsg_die("Unsupported compression method!");
 			//change to default
-			uncompress((Bytef *) b, &dlen,
-					(Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
-					(uLongf) je32_to_cpu(n->csize));
+			//uncompress((Bytef *) b, &dlen,
+			//		(Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
+			//		(uLongf) je32_to_cpu(n->csize));
 	}
 
 	*rsize = je32_to_cpu(n->dsize);
 	#endif
-	
+
 }
 
 /* adds/removes directory node into dir struct. */
@@ -292,6 +334,26 @@ const char *mode_string(int mode)
 	}
 	return buf;
 }
+
+
+int get_file_mode(int mode)
+{
+   #if 0
+	static char buf[12];
+    int res = 0;
+	int i;
+
+	buf[0] = TYPECHAR(mode);
+	for (i = 0; i < 9; i++) {
+		if (mode & SBIT[i])
+			buf[i + 1] = (mode & MBIT[i]) ? SMODE1[i] : SMODE0[i];
+		else
+			buf[i + 1] = (mode & MBIT[i]) ? MODE1[i] : MODE0[i];
+	}
+	#endif
+	return 0x777;
+}
+
 
 void get_node_data(char *r_buf,struct dir *d_list,size_t size)
 {
@@ -905,7 +967,7 @@ void do_extract_dir()
 	{
 	   system("rm -rf $PWD/kernel_fs");
 	}
-	
+
 	mkdir(extract_path, 0777);
 }
 
@@ -925,12 +987,16 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
     char fnbuf[4096];
     char current_path[4096];
     int fd = -1;
+	jint32_t mode;
+	int mode_val = 0;
     size_t sz = 0;
     bzero(current_path,4096);
 	bzero(fnbuf,4096);
-	
-    snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s",extract_path, path, d->name);
 
+    mode.v32 = ri->mode.m;
+
+    snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s",extract_path, path, d->name);
+    printf("my buf:%s \n",fnbuf);
 	//snprintf(fnbuf, sizeof(fnbuf), "%s%s","/kernel_fs/", d->name);
     switch(m) {
         case '/':
@@ -947,9 +1013,8 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
                 while(ri) {
                     char buf[16384];
 					int w_cnt = 0;
-					printf("put block:%s \n",fnbuf);
                     putblock(buf, sizeof(buf), &sz, ri);
-					
+
                     w_cnt = write(fd, buf, sz);
 					if(w_cnt != sz)
 						sys_errmsg_die("Failed to write files \n");
@@ -963,9 +1028,8 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
 				bzero(buf,256);
 				putblock(buf, sizeof(buf), &sz, ri);
 				//buf save the name of the linked file
-				
+
 				snprintf(current_path, sizeof(current_path), "%s%s/%s",extract_path, path, buf);
-				printf("cur:%s \n",current_path);
 				symlink(buf,fnbuf);
 			}
 			break;
@@ -973,10 +1037,10 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
             warnmsg("Not extracting special file %s", fnbuf);
             break;
     }
-	
+
 	if(fd >= 0)
 		printf("close:%d \n",close(fd));
-	
+
 }
 
 

@@ -1,6 +1,6 @@
 /* vi: set sw=4 ts=4: */
 /*
- * jffs2extract v0.1: Extract the contents of a JFFS2 image file.
+ * jffs2extract v0.2: Extract the contents of a JFFS2 image file.
  *
  * Based on jffs2reader by Jari Kirma
  *
@@ -180,7 +180,6 @@ void putblock(char *b, size_t bsize, size_t * rsize,
 	if (je32_to_cpu(n->dsize) > bsize)
 		errmsg_die("File does not fit into buffer!");
 	bzero(b,bsize);
-	printf("com size;%d org size: %d compress: %d \n",je32_to_cpu(n->csize),je32_to_cpu(n->dsize),n->compr);
 	switch (n->compr) {
 		case JFFS2_COMPR_ZLIB:
 			uncompress((Bytef *) b, &dlen,
@@ -336,72 +335,6 @@ const char *mode_string(int mode)
 }
 
 
-int get_file_mode(int mode)
-{
-   #if 0
-	static char buf[12];
-    int res = 0;
-	int i;
-
-	buf[0] = TYPECHAR(mode);
-	for (i = 0; i < 9; i++) {
-		if (mode & SBIT[i])
-			buf[i + 1] = (mode & MBIT[i]) ? SMODE1[i] : SMODE0[i];
-		else
-			buf[i + 1] = (mode & MBIT[i]) ? MODE1[i] : MODE0[i];
-	}
-	#endif
-	return 0x777;
-}
-
-
-void get_node_data(char *r_buf,struct dir *d_list,size_t size)
-{
-     char *buf;
-	 char *buf_write;
-	 int ino =d_list->ino;
-	 int nsize = d_list->nsize;// size of the name
-	 int read_size = 0;
-	 union jffs2_node_union *n;
-	 union jffs2_node_union *e = (union jffs2_node_union *) (r_buf + size);
-	 union jffs2_node_union *mp = NULL;  /* minimum position */
-
-
-
-	 buf =xmalloc(4096);
-	 memset(buf,0,4096);
-	 buf_write = buf;
-	 n = (union jffs2_node_union *) r_buf;
-
-	 do {
-
-		 while (je16_to_cpu(n->u.magic) != JFFS2_MAGIC_BITMASK)
-			 ADD_BYTES(n, 4);
-
-		 if (je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK) {
-			 if (je16_to_cpu(n->u.nodetype) == JFFS2_NODETYPE_INODE &&
-				 je32_to_cpu(n->i.ino) == ino ) {
-				 #if 0
-				 memcpy(buf_write,n->i.data,n->i.dsize);
-				 /* XXX crc check */
-			     ADD_BYTES(n, ((je32_to_cpu(n->u.totlen) + 3) & ~3));
-				 #endif
-				 memcpy(buf_write,n->i.data,je32_to_cpu(n->i.dsize));
-				 buf_write += je32_to_cpu(n->i.dsize);
-				 read_size += je32_to_cpu(n->i.dsize);
-			     ADD_BYTES(n, ((je32_to_cpu(n->u.totlen) + 3) & ~3));
-
-		     }
-			 else
-			 {
-			     ADD_BYTES(n, ((je32_to_cpu(n->u.totlen) + 3) & ~3));
-
-			 }
-		 }
-	 } while (n < e);
-
-}
-
 
 
 /* prints contents of directory structure */
@@ -455,7 +388,6 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 			default:
 				m = '?';
 		}
-		//get_node_data(o,d,size);
 		// find the first inode of a file
 		ri = find_raw_inode(o, size, d->ino, 0);
 		if (!ri) {
@@ -484,44 +416,6 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 
 		d = d->next;
 	}
-}
-
-void do_print(char* imagebuf, size_t imagesize, struct dir *d, char m, struct jffs2_raw_inode *ri, uint32_t len, const char *path, int verbose)
-{
-	jint32_t mode;
-	time_t age;
-	char *filetime;
-
-    filetime = ctime((const time_t *) &(ri->ctime));
-    age = time(NULL) - je32_to_cpu(ri->ctime);
-    mode.v32 = ri->mode.m;
-    if(verbose) printf("%s %-4d %-8d %-8d ", mode_string(je32_to_cpu(mode)),
-            1, je16_to_cpu(ri->uid), je16_to_cpu(ri->gid));
-    if ( d->type==DT_BLK || d->type==DT_CHR ) {
-        dev_t rdev;
-        size_t devsize;
-        putblock((char*)&rdev, sizeof(rdev), &devsize, ri);
-        if(verbose) printf("%4d, %3d ", major(rdev), minor(rdev));
-    } else {
-        if(verbose) printf("%9ld ", (long)len);
-    }
-    d->name[d->nsize]='\0';
-    if (verbose) {
-        if (age < 3600L * 24 * 365 / 2 && age > -15 * 60)
-            /* hh:mm if less than 6 months old */
-            printf("%6.6s %5.5s ", filetime + 4, filetime + 11);
-        else
-            printf("%6.6s %4.4s ", filetime + 4, filetime + 20);
-    }
-    printf("%s%s%s%c", (path[0] == 0) ? "" : path+1, (path[0] == 0) ? "" : "/", d->name, m);
-    if (d->type == DT_LNK) {
-        char symbuf[1024];
-        size_t symsize;
-        putblock(symbuf, sizeof(symbuf), &symsize, ri);
-        symbuf[symsize] = 0;
-        printf(" -> %s", symbuf);
-    }
-    printf("\n");
 }
 
 /* frees memory used by directory structure */
@@ -957,7 +851,6 @@ void visit(char *buf, size_t size, const char *path, int verbose, visitor visito
 void do_extract_dir()
 {
 
-	int real_size = 0;
 	int doc_exist = 0;
 
 	getcwd(extract_path,sizeof(extract_path));
@@ -988,16 +881,13 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
     char fnbuf[4096];
     char current_path[4096];
     int fd = -1;
-	jint32_t mode;
-	int mode_val = 0;
     size_t sz = 0;
     bzero(current_path,4096);
 	bzero(fnbuf,4096);
 
-    mode.v32 = ri->mode.m;
+
 
     snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s",extract_path, path, d->name);
-    printf("my buf:%s \n",fnbuf);
 	//snprintf(fnbuf, sizeof(fnbuf), "%s%s","/kernel_fs/", d->name);
     switch(m) {
         case '/':
@@ -1040,8 +930,13 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
     }
 
 	if(fd >= 0)
-		printf("close:%d \n",close(fd));
+		close(fd);
 
+}
+
+void usage(char** argv) {
+    fprintf(stderr, "Usage: %s [-f imagefile] [-h help]\n", argv[0]);
+    exit(255);
 }
 
 
@@ -1049,19 +944,16 @@ void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct 
 #define BUFFER_SIZE 16384
 int main(int argc, char **argv)
 {
-	int fd, opt, want_ctime = 0, verbose = 0;
+	int fd, opt, verbose = 0;
 	size_t filesize, bytes;
     visitor v = NULL;
-	char *scratch, *imgfile = "image";
-	size_t ssize = 0;
-
-	char *buf;
-	#if  0
+	char  *imgfile = "image";
+	char *buf = NULL;
 	if(argc < 2) {
 	    usage(argv);
 	}
 
-	while ((opt = getopt(argc, argv, "hf:C:txv")) > 0) {
+	while ((opt = getopt(argc, argv, "hf:d:")) > 0) {
 		switch (opt) {
 		    case 'h':
 		        usage(argv);
@@ -1069,22 +961,6 @@ int main(int argc, char **argv)
 			case 'f':
 				imgfile = optarg;
 				break;
-			case 'C':
-			    if(chdir(optarg)) {
-			        sys_errmsg_die("Unable to change directory");
-			    }
-			    break;
-			case 't':
-			    if(v) errmsg_die("Can't specify both -x and -t");
-			    v = do_print;
-				break;
-			case 'v':
-			    verbose = 1;
-				break;
-			case 'x':
-			    if(v) errmsg_die("Can't specify both -x and -t");
-			    v = do_extract;
-			    break;
 			default:
 				fprintf(stderr,
 						"Usage: %s <image> [-d|-f] < path >\n",
@@ -1093,27 +969,33 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if(!v) errmsg_die("Must specify one of -x, -t");
-    #endif
-    do_extract_dir();
-	v = do_extract;
 
     if(imgfile) {
         fd = open(imgfile, O_RDONLY);
         if (fd == -1)
             sys_errmsg_die("%s", argv[optind]);
-    } else fd = STDIN_FILENO;
+    }
+	else
+	{
+	     sys_errmsg_die("Empty File Name\n");
+	}
+
+    do_extract_dir();
+	v = do_extract;
 
 
     buf = xmalloc(BUFFER_SIZE);
+	if(!buf)
+
     memset(buf,0,BUFFER_SIZE);
     while((bytes = read(fd, buf + filesize, BUFFER_SIZE)) == BUFFER_SIZE) {
         filesize += bytes;
         buf = xrealloc(buf, filesize + BUFFER_SIZE);
     }
     filesize += bytes;
+    printf("\nStart to extract the image, waiting...\n");
     visit(buf, filesize, NULL, verbose, v);
-
+    printf("\nFinish extract Jffs2 %s \n",imgfile);
     close(fd);
 	free(buf);
 	exit(EXIT_SUCCESS);

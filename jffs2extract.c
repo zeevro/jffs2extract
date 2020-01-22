@@ -50,17 +50,18 @@
 #include "include/jffs2-user.h"
 #include "include/common.h"
 
-#define SCRATCH_SIZE (5*1024*1024)
+#define SCRATCH_SIZE (5 * 1024 * 1024)
 
 char extract_path[256];
 
 /* macro to avoid "lvalue required as left operand of assignment" error */
-#define ADD_BYTES(p, n)		((p) = (typeof(p))((char *)(p) + (n)))
+#define ADD_BYTES(p, n) ((p) = (typeof(p))((char *)(p) + (n)))
 
-#define DIRENT_INO(dirent) ((dirent) !=NULL ? je32_to_cpu((dirent)->ino) : 0)
-#define DIRENT_PINO(dirent) ((dirent) !=NULL ? je32_to_cpu((dirent)->pino) : 0)
+#define DIRENT_INO(dirent) ((dirent) != NULL ? je32_to_cpu((dirent)->ino) : 0)
+#define DIRENT_PINO(dirent) ((dirent) != NULL ? je32_to_cpu((dirent)->pino) : 0)
 
-struct dir {
+struct dir
+{
 	struct dir *next;
 	uint8_t type;
 	uint8_t nsize;
@@ -72,39 +73,31 @@ int target_endian = __BYTE_ORDER;
 
 void putblock(char *, size_t, size_t *, struct jffs2_raw_inode *);
 struct dir *putdir(struct dir *, struct jffs2_raw_dirent *);
-void printdir(char *o, size_t size, struct dir *d, const char *path,
-     int verbose);
+void printdir(char *o, size_t size, struct dir *d, const char *path, int verbose);
 void freedir(struct dir *);
 
 struct jffs2_raw_inode *find_raw_inode(char *o, size_t size, uint32_t ino, uint32_t vcur);
-struct jffs2_raw_dirent *resolvedirent(char *, size_t, uint32_t, uint32_t,
-		char *, uint8_t);
+struct jffs2_raw_dirent *resolvedirent(char *, size_t, uint32_t, uint32_t, char *, uint8_t);
 struct jffs2_raw_dirent *resolvename(char *, size_t, uint32_t, char *, uint8_t);
 struct jffs2_raw_dirent *resolveinode(char *, size_t, uint32_t);
 
-struct jffs2_raw_dirent *resolvepath0(char *, size_t, uint32_t, const char *,
-		uint32_t *, int);
-struct jffs2_raw_dirent *resolvepath(char *, size_t, uint32_t, const char *,
-		uint32_t *);
+struct jffs2_raw_dirent *resolvepath0(char *, size_t, uint32_t, const char *, uint32_t *, int);
+struct jffs2_raw_dirent *resolvepath(char *, size_t, uint32_t, const char *, uint32_t *);
 
-typedef void (*visitor)(char* imagebuf, size_t imagesize, struct dir *d, char m,
-    struct jffs2_raw_inode *ri, uint32_t len, const char *path, int verbose);
-
-
+typedef void (*visitor)(char *imagebuf, size_t imagesize, struct dir *d, char m, struct jffs2_raw_inode *ri, uint32_t len, const char *path, int verbose);
 
 void visit(char *o, size_t size, const char *path, int verbose, visitor visitor);
 
-
-static int rtime_decompress(unsigned char *data_in, unsigned char *cpage_out,
-		uint32_t srclen, uint32_t destlen)
+static int rtime_decompress(unsigned char *data_in, unsigned char *cpage_out, uint32_t srclen, uint32_t destlen)
 {
 	short positions[256];
 	int outpos = 0;
-	int pos=0;
+	int pos = 0;
 
-	memset(positions,0,sizeof(positions));
+	memset(positions, 0, sizeof(positions));
 
-	while (outpos<destlen) {
+	while (outpos < destlen)
+	{
 		unsigned char value;
 		int backoffs;
 		int repeat;
@@ -114,35 +107,38 @@ static int rtime_decompress(unsigned char *data_in, unsigned char *cpage_out,
 		repeat = data_in[pos++];
 		backoffs = positions[value];
 
-		positions[value]=outpos;
-		if (repeat) {
-			if (backoffs + repeat >= outpos) {
-				while(repeat) {
+		positions[value] = outpos;
+		if (repeat)
+		{
+			if (backoffs + repeat >= outpos)
+			{
+				while (repeat)
+				{
 					cpage_out[outpos++] = cpage_out[backoffs++];
 					repeat--;
 				}
-			} else {
-				memcpy(&cpage_out[outpos],&cpage_out[backoffs],repeat);
-				outpos+=repeat;
+			}
+			else
+			{
+				memcpy(&cpage_out[outpos], &cpage_out[backoffs], repeat);
+				outpos += repeat;
 			}
 		}
 	}
 	return 0;
 }
 
-
 /* writes file node into buffer, to the proper position. */
 /* reading all valid nodes in version order reconstructs the file. */
 
 /*
-   b       - buffer
+   b	   - buffer
    bsize   - buffer size
    rsize   - result size
-   n       - node
+   n	   - node
  */
 
-void putblock(char *b, size_t bsize, size_t * rsize,
-		struct jffs2_raw_inode *n)
+void putblock(char *b, size_t bsize, size_t *rsize, struct jffs2_raw_inode *n)
 {
 	uLongf dlen = je32_to_cpu(n->dsize);
 #if 0
@@ -175,49 +171,49 @@ void putblock(char *b, size_t bsize, size_t * rsize,
 	}
 
 	*rsize = je32_to_cpu(n->dsize);
-	#else
+#else
 
 	if (je32_to_cpu(n->dsize) > bsize)
 		errmsg_die("File does not fit into buffer!");
-	bzero(b,bsize);
-	switch (n->compr) {
-		case JFFS2_COMPR_ZLIB:
-			uncompress((Bytef *) b, &dlen,
-					(Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
-					(uLongf) je32_to_cpu(n->csize));
-			break;
+	bzero(b, bsize);
+	switch (n->compr)
+	{
+	case JFFS2_COMPR_ZLIB:
+		uncompress((Bytef *)b, &dlen,
+				   (Bytef *)((char *)n) + sizeof(struct jffs2_raw_inode),
+				   (uLongf)je32_to_cpu(n->csize));
+		break;
 
-		case JFFS2_COMPR_NONE:
-			memcpy(b ,((char *) n) + sizeof(struct jffs2_raw_inode), dlen);
-			break;
+	case JFFS2_COMPR_NONE:
+		memcpy(b, ((char *)n) + sizeof(struct jffs2_raw_inode), dlen);
+		break;
 
-		case JFFS2_COMPR_ZERO:
-			bzero(b + je32_to_cpu(n->offset), dlen);
-			break;
-		case JFFS2_COMPR_RTIME:
-			rtime_decompress((Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
-				        (Bytef *)b, je32_to_cpu(n->csize),dlen);
-			break;
-			/* [DYN]RUBIN support required! */
-		default:
-			errmsg_die("Unsupported compression method!");
-			//change to default
-			//uncompress((Bytef *) b, &dlen,
-			//		(Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
-			//		(uLongf) je32_to_cpu(n->csize));
+	case JFFS2_COMPR_ZERO:
+		bzero(b + je32_to_cpu(n->offset), dlen);
+		break;
+	case JFFS2_COMPR_RTIME:
+		rtime_decompress((Bytef *)((char *)n) + sizeof(struct jffs2_raw_inode),
+						 (Bytef *)b, je32_to_cpu(n->csize), dlen);
+		break;
+		/* [DYN]RUBIN support required! */
+	default:
+		errmsg_die("Unsupported compression method!");
+		//change to default
+		//uncompress((Bytef *) b, &dlen,
+		//		(Bytef *) ((char *) n) + sizeof(struct jffs2_raw_inode),
+		//		(uLongf) je32_to_cpu(n->csize));
 	}
 
 	*rsize = je32_to_cpu(n->dsize);
-	#endif
-
+#endif
 }
 
 /* adds/removes directory node into dir struct. */
 /* reading all valid nodes in version order reconstructs the directory. */
 
 /*
-   dd      - directory struct being processed
-   n       - node
+   dd	  - directory struct being processed
+   n	   - node
 
    return value: directory struct value replacing dd
  */
@@ -227,10 +223,12 @@ struct dir *putdir(struct dir *dd, struct jffs2_raw_dirent *n)
 	struct dir *o, *d, *p;
 
 	o = dd;
-	if (je32_to_cpu(n->ino)) {
-		if (dd == NULL) {
+	if (je32_to_cpu(n->ino))
+	{
+		if (dd == NULL)
+		{
 			d = xmalloc(sizeof(struct dir));
-			memset(d,0,sizeof(struct dir));
+			memset(d, 0, sizeof(struct dir));
 			d->type = n->type;
 			memcpy(d->name, n->name, n->nsize);
 			d->nsize = n->nsize;
@@ -240,18 +238,21 @@ struct dir *putdir(struct dir *dd, struct jffs2_raw_dirent *n)
 			return d;
 		}
 
-		while (1) {
+		while (1)
+		{
 			if (n->nsize == dd->nsize &&
-					!memcmp(n->name, dd->name, n->nsize)) {
+				!memcmp(n->name, dd->name, n->nsize))
+			{
 				dd->type = n->type;
 				dd->ino = je32_to_cpu(n->ino);
 
 				return o;
 			}
 
-			if (dd->next == NULL) {
+			if (dd->next == NULL)
+			{
 				dd->next = xmalloc(sizeof(struct dir));
-				memset(dd->next,0,sizeof(struct dir));
+				memset(dd->next, 0, sizeof(struct dir));
 				dd->next->type = n->type;
 				memcpy(dd->next->name, n->name, n->nsize);
 				dd->next->nsize = n->nsize;
@@ -263,17 +264,21 @@ struct dir *putdir(struct dir *dd, struct jffs2_raw_dirent *n)
 
 			dd = dd->next;
 		}
-	} else {
+	}
+	else
+	{
 		if (dd == NULL)
 			return NULL;
 
-		if (n->nsize == dd->nsize && !memcmp(n->name, dd->name, n->nsize)) {
+		if (n->nsize == dd->nsize && !memcmp(n->name, dd->name, n->nsize))
+		{
 			d = dd->next;
 			free(dd);
 			return d;
 		}
 
-		while (1) {
+		while (1)
+		{
 			p = dd;
 			dd = dd->next;
 
@@ -281,7 +286,8 @@ struct dir *putdir(struct dir *dd, struct jffs2_raw_dirent *n)
 				return o;
 
 			if (n->nsize == dd->nsize &&
-					!memcmp(n->name, dd->name, n->nsize)) {
+				!memcmp(n->name, dd->name, n->nsize))
+			{
 				p->next = dd->next;
 				free(dd);
 
@@ -291,23 +297,20 @@ struct dir *putdir(struct dir *dd, struct jffs2_raw_dirent *n)
 	}
 }
 
-
 #define TYPEINDEX(mode) (((mode) >> 12) & 0x0f)
-#define TYPECHAR(mode)  ("0pcCd?bB-?l?s???" [TYPEINDEX(mode)])
+#define TYPECHAR(mode) ("0pcCd?bB-?l?s???"[TYPEINDEX(mode)])
 
 /* The special bits. If set, display SMODE0/1 instead of MODE0/1 */
 static const mode_t SBIT[] = {
 	0, 0, S_ISUID,
 	0, 0, S_ISGID,
-	0, 0, S_ISVTX
-};
+	0, 0, S_ISVTX};
 
 /* The 9 mode bits to test */
 static const mode_t MBIT[] = {
 	S_IRUSR, S_IWUSR, S_IXUSR,
 	S_IRGRP, S_IWGRP, S_IXGRP,
-	S_IROTH, S_IWOTH, S_IXOTH
-};
+	S_IROTH, S_IWOTH, S_IXOTH};
 
 static const char MODE1[] = "rwxrwxrwx";
 static const char MODE0[] = "---------";
@@ -325,7 +328,8 @@ const char *mode_string(int mode)
 	int i;
 
 	buf[0] = TYPECHAR(mode);
-	for (i = 0; i < 9; i++) {
+	for (i = 0; i < 9; i++)
+	{
 		if (mode & SBIT[i])
 			buf[i + 1] = (mode & MBIT[i]) ? SMODE1[i] : SMODE0[i];
 		else
@@ -334,13 +338,10 @@ const char *mode_string(int mode)
 	return buf;
 }
 
-
-
-
 /* prints contents of directory structure */
 
 /*
-   d       - dir struct
+   d	   - dir struct
  */
 
 void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose, visitor visitor)
@@ -349,48 +350,52 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 	uint32_t len = 0;
 	struct jffs2_raw_inode *ri, *tmpi;
 
-	if (!path) {
-	    path = "/";
+	if (!path)
+	{
+		path = "/";
 	}
 	if (strlen(path) == 1 && *path == '/')
 		path++;
 
-	while (d != NULL) {
-		switch (d->type) {
-			case DT_REG:
-				m = ' ';
-				break;
+	while (d != NULL)
+	{
+		switch (d->type)
+		{
+		case DT_REG:
+			m = ' ';
+			break;
 
-			case DT_FIFO:
-				m = '|';
-				break;
+		case DT_FIFO:
+			m = '|';
+			break;
 
-			case DT_CHR:
-				m = ' ';
-				break;
+		case DT_CHR:
+			m = ' ';
+			break;
 
-			case DT_BLK:
-				m = ' ';
-				break;
+		case DT_BLK:
+			m = ' ';
+			break;
 
-			case DT_DIR:
-				m = '/';
-				break;
+		case DT_DIR:
+			m = '/';
+			break;
 
-			case DT_LNK:
-				m = '>';
-				break;
+		case DT_LNK:
+			m = '>';
+			break;
 
-			case DT_SOCK:
-				m = '=';
-				break;
+		case DT_SOCK:
+			m = '=';
+			break;
 
-			default:
-				m = '?';
+		default:
+			m = '?';
 		}
 		// find the first inode of a file
 		ri = find_raw_inode(o, size, d->ino, 0);
-		if (!ri) {
+		if (!ri)
+		{
 			warnmsg("bug: raw_inode missing!");
 			d = d->next;
 			continue;
@@ -398,17 +403,19 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 		/* Search for newer versions of the inode */
 		//the same node but with the different version , the highest version is what we want the inode
 		tmpi = ri;
-		while (tmpi) {
+		while (tmpi)
+		{
 			len = je32_to_cpu(tmpi->dsize) + je32_to_cpu(tmpi->offset);
 			tmpi = find_raw_inode(o, size, d->ino, je32_to_cpu(tmpi->version));
 		}
-        //ri is the address of the buffer
+		//ri is the address of the buffer
 		visitor(o, size, d, m, ri, len, path, verbose);
 
-		if (d->type == DT_DIR) {
+		if (d->type == DT_DIR)
+		{
 			char *tmp;
 			tmp = xmalloc(BUFSIZ);
-			memset(tmp,0,BUFSIZ);
+			memset(tmp, 0, BUFSIZ);
 			sprintf(tmp, "%s/%s", path, d->name);
 			visit(o, size, tmp, verbose, visitor);
 			free(tmp);
@@ -421,14 +428,15 @@ void visitdir(char *o, size_t size, struct dir *d, const char *path, int verbose
 /* frees memory used by directory structure */
 
 /*
-   d       - dir struct
+   d	   - dir struct
  */
 
 void freedir(struct dir *d)
 {
 	struct dir *t;
 
-	while (d != NULL) {
+	while (d != NULL)
+	{
 		t = d->next;
 		free(d);
 		d = t;
@@ -438,48 +446,51 @@ void freedir(struct dir *d)
 /* collects directory/file nodes in version order. */
 
 /*
-   f       - file flag.
+   f	   - file flag.
    if zero, collect file, compare ino to inode
    otherwise, collect directory, compare ino to parent inode
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   ino     - inode to compare against. see f.
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   ino	 - inode to compare against. see f.
 
    return value: a jffs2_raw_inode that corresponds the the specified
    inode, or NULL
  */
 
-struct jffs2_raw_inode *find_raw_inode(char *o, size_t size, uint32_t ino,
-	uint32_t vcur)
+struct jffs2_raw_inode *find_raw_inode(char *o, size_t size, uint32_t ino, uint32_t vcur)
 {
 	/* aligned! */
 	union jffs2_node_union *n;
-	union jffs2_node_union *e = (union jffs2_node_union *) (o + size);
-	union jffs2_node_union *lr;	/* last block position */
-	union jffs2_node_union *mp = NULL;	/* minimum position */
+	union jffs2_node_union *e = (union jffs2_node_union *)(o + size);
+	union jffs2_node_union *lr;		   /* last block position */
+	union jffs2_node_union *mp = NULL; /* minimum position */
 
 	uint32_t vmin, vmint, vmaxt, vmax, v;
 
-	vmin = 0;					/* next to read */
-	vmax = ~((uint32_t) 0);		/* last to read */
-	vmint = ~((uint32_t) 0);
-	vmaxt = 0;					/* found maximum */
+	vmin = 0;			   /* next to read */
+	vmax = ~((uint32_t)0); /* last to read */
+	vmint = ~((uint32_t)0);
+	vmaxt = 0; /* found maximum */
 
-	n = (union jffs2_node_union *) o;
+	n = (union jffs2_node_union *)o;
 	lr = n;
 
-	do {
+	do
+	{
 		while (n < e && je16_to_cpu(n->u.magic) != JFFS2_MAGIC_BITMASK)
 			ADD_BYTES(n, 4);
 
-		if (n < e && je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK) {
+		if (n < e && je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK)
+		{
 			if (je16_to_cpu(n->u.nodetype) == JFFS2_NODETYPE_INODE &&
-				je32_to_cpu(n->i.ino) == ino && (v = je32_to_cpu(n->i.version)) > vcur) {
+				je32_to_cpu(n->i.ino) == ino && (v = je32_to_cpu(n->i.version)) > vcur)
+			{
 				/* XXX crc check */
 
 				if (vmaxt < v)
 					vmaxt = v;
-				if (vmint > v) {
+				if (vmint > v)
+				{
 					vmint = v;
 					mp = n;
 				}
@@ -489,13 +500,15 @@ struct jffs2_raw_inode *find_raw_inode(char *o, size_t size, uint32_t ino,
 			}
 
 			ADD_BYTES(n, ((je32_to_cpu(n->u.totlen) + 3) & ~3));
-		} else
-			n = (union jffs2_node_union *) o;	/* we're at the end, rewind to the beginning */
+		}
+		else
+			n = (union jffs2_node_union *)o; /* we're at the end, rewind to the beginning */
 
-		if (lr == n) {			/* whole loop since last read */
+		if (lr == n)
+		{ /* whole loop since last read */
 			vmax = vmaxt;
 			vmin = vmint;
-			vmint = ~((uint32_t) 0);
+			vmint = ~((uint32_t)0);
 
 			if (vcur < vmax && vcur < vmin)
 				return (&(mp->i));
@@ -508,10 +521,10 @@ struct jffs2_raw_inode *find_raw_inode(char *o, size_t size, uint32_t ino,
 /* collects dir struct for selected inode */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   pino    - inode of the specified directory
-   d       - input directory structure
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   pino	- inode of the specified directory
+   d	   - input directory structure
 
    return value: result directory structure, replaces d.
  */
@@ -520,62 +533,70 @@ struct dir *collectdir(char *o, size_t size, uint32_t ino, struct dir *d)
 {
 	/* aligned! */
 	union jffs2_node_union *n;
-	union jffs2_node_union *e = (union jffs2_node_union *) (o + size);
-	union jffs2_node_union *lr;	/* last block position */
-	union jffs2_node_union *mp = NULL;	/* minimum position */
+	union jffs2_node_union *e = (union jffs2_node_union *)(o + size);
+	union jffs2_node_union *lr;		   /* last block position */
+	union jffs2_node_union *mp = NULL; /* minimum position */
 
 	uint32_t vmin, vmint, vmaxt, vmax, vcur, v;
 
-	vmin = 0;					/* next to read */
-	vmax = ~((uint32_t) 0);		/* last to read */
-	vmint = ~((uint32_t) 0);
-	vmaxt = 0;					/* found maximum */
-	vcur = 0;					/* XXX what is smallest version number used? */
+	vmin = 0;			   /* next to read */
+	vmax = ~((uint32_t)0); /* last to read */
+	vmint = ~((uint32_t)0);
+	vmaxt = 0; /* found maximum */
+	vcur = 0;  /* XXX what is smallest version number used? */
 	/* too low version number can easily result excess log rereading */
 
-	n = (union jffs2_node_union *) o;
+	n = (union jffs2_node_union *)o;
 	lr = n;
 
-	do {
+	do
+	{
 		while (n < e && je16_to_cpu(n->u.magic) != JFFS2_MAGIC_BITMASK)
 			ADD_BYTES(n, 4);
 
-		if (n < e && je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK) {
+		if (n < e && je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK)
+		{
 			if (je16_to_cpu(n->u.nodetype) == JFFS2_NODETYPE_DIRENT &&
-				je32_to_cpu(n->d.pino) == ino && ((v = je32_to_cpu(n->d.version)) > vcur || (je32_to_cpu(n->d.version) == 0))) {
+				je32_to_cpu(n->d.pino) == ino && ((v = je32_to_cpu(n->d.version)) > vcur || (je32_to_cpu(n->d.version) == 0)))
+			{
 				/* XXX crc check */
 
 				if (vmaxt < v)
 					vmaxt = v;
-				if (vmint > v) {
+				if (vmint > v)
+				{
 					vmint = v;
 					mp = n;
 				}
 
-				if (v == (vcur + 1) || v == 0) {
+				if (v == (vcur + 1) || v == 0)
+				{
 					d = putdir(d, &(n->d));
 
 					lr = n;
-					if(v != 0)
-					    vcur++;
-					vmint = ~((uint32_t) 0);
+					if (v != 0)
+						vcur++;
+					vmint = ~((uint32_t)0);
 				}
 			}
 			ADD_BYTES(n, ((je32_to_cpu(n->u.totlen) + 3) & ~3));
-		} else
-			n = (union jffs2_node_union *) o;	/* we're at the end, rewind to the beginning */
+		}
+		else
+			n = (union jffs2_node_union *)o; /* we're at the end, rewind to the beginning */
 
-		if (lr == n) {			/* whole loop since last read */
+		if (lr == n)
+		{ /* whole loop since last read */
 			vmax = vmaxt;
 			vmin = vmint;
-			vmint = ~((uint32_t) 0);
+			vmint = ~((uint32_t)0);
 
-			if (vcur < vmax && vcur < vmin) {
+			if (vcur < vmax && vcur < vmin)
+			{
 				d = putdir(d, &(mp->d));
 
 				lr = n =
-					(union jffs2_node_union *) (((char *) mp) +
-							((je32_to_cpu(mp->u.totlen) + 3) & ~3));
+					(union jffs2_node_union *)(((char *)mp) +
+											   ((je32_to_cpu(mp->u.totlen) + 3) & ~3));
 
 				vcur = vmin;
 			}
@@ -585,32 +606,28 @@ struct dir *collectdir(char *o, size_t size, uint32_t ino, struct dir *d)
 	return d;
 }
 
-
-
 /* resolve dirent based on criteria */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   ino     - if zero, ignore,
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   ino	 - if zero, ignore,
    otherwise compare against dirent inode
-   pino    - if zero, ingore,
+   pino	- if zero, ingore,
    otherwise compare against parent inode
    and use name and nsize as extra criteria
-   name    - name of wanted dirent, used if pino!=0
+   name	- name of wanted dirent, used if pino!=0
    nsize   - length of name of wanted dirent, used if pino!=0
 
    return value: pointer to relevant dirent structure in
    filesystem image or NULL
  */
 
-struct jffs2_raw_dirent *resolvedirent(char *o, size_t size,
-		uint32_t ino, uint32_t pino,
-		char *name, uint8_t nsize)
+struct jffs2_raw_dirent *resolvedirent(char *o, size_t size, uint32_t ino, uint32_t pino, char *name, uint8_t nsize)
 {
 	/* aligned! */
 	union jffs2_node_union *n;
-	union jffs2_node_union *e = (union jffs2_node_union *) (o + size);
+	union jffs2_node_union *e = (union jffs2_node_union *)(o + size);
 
 	struct jffs2_raw_dirent *dd = NULL;
 
@@ -621,29 +638,34 @@ struct jffs2_raw_dirent *resolvedirent(char *o, size_t size,
 
 	vmax = 0;
 
-	n = (union jffs2_node_union *) o;
+	n = (union jffs2_node_union *)o;
 
-	do {
+	do
+	{
 		while (n < e && je16_to_cpu(n->u.magic) != JFFS2_MAGIC_BITMASK)
 			ADD_BYTES(n, 4);
 
-		if (n < e && je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK) {
+		if (n < e && je16_to_cpu(n->u.magic) == JFFS2_MAGIC_BITMASK)
+		{
 			if (je16_to_cpu(n->u.nodetype) == JFFS2_NODETYPE_DIRENT &&
-					(!ino || je32_to_cpu(n->d.ino) == ino) &&
-					(v = je32_to_cpu(n->d.version)) > vmax &&
-					(!pino || (je32_to_cpu(n->d.pino) == pino &&
-							   nsize == n->d.nsize &&
-							   !memcmp(name, n->d.name, nsize)))) {
+				(!ino || je32_to_cpu(n->d.ino) == ino) &&
+				(v = je32_to_cpu(n->d.version)) > vmax &&
+				(!pino || (je32_to_cpu(n->d.pino) == pino &&
+						   nsize == n->d.nsize &&
+						   !memcmp(name, n->d.name, nsize))))
+			{
 				/* XXX crc check */
 
-				if (vmax < v) {
+				if (vmax < v)
+				{
 					vmax = v;
 					dd = &(n->d);
 				}
 			}
 
 			ADD_BYTES(n, ((je32_to_cpu(n->u.totlen) + 3) & ~3));
-		} else
+		}
+		else
 			return dd;
 	} while (1);
 }
@@ -651,18 +673,17 @@ struct jffs2_raw_dirent *resolvedirent(char *o, size_t size,
 /* resolve name under certain parent inode to dirent */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   pino    - requested parent inode
-   name    - name of wanted dirent
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   pino	- requested parent inode
+   name	- name of wanted dirent
    nsize   - length of name of wanted dirent
 
    return value: pointer to relevant dirent structure in
    filesystem image or NULL
  */
 
-struct jffs2_raw_dirent *resolvename(char *o, size_t size, uint32_t pino,
-		char *name, uint8_t nsize)
+struct jffs2_raw_dirent *resolvename(char *o, size_t size, uint32_t pino, char *name, uint8_t nsize)
 {
 	return resolvedirent(o, size, 0, pino, name, nsize);
 }
@@ -670,9 +691,9 @@ struct jffs2_raw_dirent *resolvename(char *o, size_t size, uint32_t pino,
 /* resolve inode to dirent */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   ino     - compare against dirent inode
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   ino	 - compare against dirent inode
 
    return value: pointer to relevant dirent structure in
    filesystem image or NULL
@@ -689,20 +710,19 @@ struct jffs2_raw_dirent *resolveinode(char *o, size_t size, uint32_t ino)
  */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   ino     - root inode, used if path is relative
-   p       - path to be resolved
-   inos    - result inode, zero if failure
-   recc    - recursion count, to detect symlink loops
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   ino	 - root inode, used if path is relative
+   p	   - path to be resolved
+   inos	- result inode, zero if failure
+   recc	- recursion count, to detect symlink loops
 
    return value: pointer to dirent struct in file system image.
    note that root directory doesn't have dirent struct
    (return value is NULL), but it has inode (*inos=1)
  */
 
-struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
-		const char *p, uint32_t * inos, int recc)
+struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino, const char *p, uint32_t *inos, int recc)
 {
 	struct jffs2_raw_dirent *dir = NULL;
 
@@ -716,7 +736,8 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
 	char symbuf[1024];
 	size_t symsize;
 
-	if (recc > 16) {
+	if (recc > 16)
+	{
 		/* probably symlink loop */
 		*inos = 0;
 		return NULL;
@@ -724,12 +745,14 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
 
 	pp = path = strdup(p);
 
-	if (*path == '/') {
+	if (*path == '/')
+	{
 		path++;
 		ino = 1;
 	}
 
-	if (ino > 1) {
+	if (ino > 1)
+	{
 		dir = resolveinode(o, size, ino);
 
 		ino = DIRENT_INO(dir);
@@ -737,7 +760,8 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
 
 	next = path - 1;
 
-	while (ino && next != NULL && next[1] != 0 && d) {
+	while (ino && next != NULL && next[1] != 0 && d)
+	{
 		path = next + 1;
 		next = strchr(path, '/');
 
@@ -746,11 +770,15 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
 
 		if (*path == '.' && path[1] == 0)
 			continue;
-		if (*path == '.' && path[1] == '.' && path[2] == 0) {
-			if (DIRENT_PINO(dir) == 1) {
+		if (*path == '.' && path[1] == '.' && path[2] == 0)
+		{
+			if (DIRENT_PINO(dir) == 1)
+			{
 				ino = 1;
 				dir = NULL;
-			} else {
+			}
+			else
+			{
 				dir = resolveinode(o, size, DIRENT_PINO(dir));
 				ino = DIRENT_INO(dir);
 			}
@@ -758,11 +786,12 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
 			continue;
 		}
 
-		dir = resolvename(o, size, ino, path, (uint8_t) strlen(path));
+		dir = resolvename(o, size, ino, path, (uint8_t)strlen(path));
 
 		if (DIRENT_INO(dir) == 0 ||
-				(next != NULL &&
-				 !(dir->type == DT_DIR || dir->type == DT_LNK))) {
+			(next != NULL &&
+			 !(dir->type == DT_DIR || dir->type == DT_LNK)))
+		{
 			free(pp);
 
 			*inos = 0;
@@ -770,7 +799,8 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
 			return NULL;
 		}
 
-		if (dir->type == DT_LNK) {
+		if (dir->type == DT_LNK)
+		{
 			struct jffs2_raw_inode *ri;
 			ri = find_raw_inode(o, size, DIRENT_INO(dir), 0);
 			putblock(symbuf, sizeof(symbuf), &symsize, ri);
@@ -782,7 +812,8 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
 			dir = resolvepath0(o, size, tino, symbuf, &ino, ++recc);
 
 			if (dir != NULL && next != NULL &&
-					!(dir->type == DT_DIR || dir->type == DT_LNK)) {
+				!(dir->type == DT_DIR || dir->type == DT_LNK))
+			{
 				free(pp);
 
 				*inos = 0;
@@ -806,19 +837,18 @@ struct jffs2_raw_dirent *resolvepath0(char *o, size_t size, uint32_t ino,
  */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   ino     - root inode, used if path is relative
-   p       - path to be resolved
-   inos    - result inode, zero if failure
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   ino	 - root inode, used if path is relative
+   p	   - path to be resolved
+   inos	- result inode, zero if failure
 
    return value: pointer to dirent struct in file system image.
    note that root directory doesn't have dirent struct
    (return value is NULL), but it has inode (*inos=1)
  */
 
-struct jffs2_raw_dirent *resolvepath(char *o, size_t size, uint32_t ino,
-		const char *p, uint32_t * inos)
+struct jffs2_raw_dirent *resolvepath(char *o, size_t size, uint32_t ino, const char *p, uint32_t *inos)
 {
 	return resolvepath0(o, size, ino, p, inos, 0);
 }
@@ -826,9 +856,9 @@ struct jffs2_raw_dirent *resolvepath(char *o, size_t size, uint32_t ino,
 /* lists files on directory specified by path */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   p       - path to be resolved
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   p	   - path to be resolved
  */
 
 void visit(char *buf, size_t size, const char *path, int verbose, visitor visitor)
@@ -840,9 +870,9 @@ void visit(char *buf, size_t size, const char *path, int verbose, visitor visito
 	dd = resolvepath(buf, size, 1, path ? path : "/", &ino);
 
 	if (ino == 0 ||
-			(dd == NULL && ino == 0) || (dd != NULL && dd->type != DT_DIR))
+		(dd == NULL && ino == 0) || (dd != NULL && dd->type != DT_DIR))
 		errmsg_die("%s: No such file or directory", path ? path : "/");
-    // issue on decoding file name......fuck
+	// issue on decoding file name......fuck
 	d = collectdir(buf, size, ino, d);
 	visitdir(buf, size, d, path, verbose, visitor);
 	freedir(d);
@@ -850,95 +880,93 @@ void visit(char *buf, size_t size, const char *path, int verbose, visitor visito
 
 void do_extract_dir()
 {
-
 	int doc_exist = 0;
 
-	getcwd(extract_path,sizeof(extract_path));
-	strcat(extract_path,"/kernel_fs");
-
-	doc_exist = access(extract_path,0);
-	if(doc_exist >= 0)
+	doc_exist = access(extract_path, 0);
+	if (doc_exist < 0)
 	{
-	   system("rm -rf $PWD/kernel_fs");
+		mkdir(extract_path, 0777);
 	}
-
-	mkdir(extract_path, 0777);
 }
 
 /* writes file specified by path to the buffer */
 
 /*
-   o       - filesystem image pointer
-   size    - size of filesystem image
-   p       - path to be resolved
-   b       - file buffer
+   o	   - filesystem image pointer
+   size	- size of filesystem image
+   p	   - path to be resolved
+   b	   - file buffer
    bsize   - file buffer size
    rsize   - file result size
  */
 
-void do_extract(char* imagebuf, size_t imagesize, struct dir *d, char m, struct jffs2_raw_inode *ri, uint32_t size, const char *path, int verbose)
+void do_extract(char *imagebuf, size_t imagesize, struct dir *d, char m, struct jffs2_raw_inode *ri, uint32_t size, const char *path, int verbose)
 {
-    char fnbuf[4096];
-    char current_path[4096];
-    int fd = -1;
-    size_t sz = 0;
-    bzero(current_path,4096);
-	bzero(fnbuf,4096);
+	char fnbuf[4096];
+	char current_path[4096];
+	int fd = -1;
+	size_t sz = 0;
+	bzero(current_path, 4096);
+	bzero(fnbuf, 4096);
 
-
-
-    snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s",extract_path, path, d->name);
+	snprintf(fnbuf, sizeof(fnbuf), "%s%s/%s", extract_path, path, d->name);
 	//snprintf(fnbuf, sizeof(fnbuf), "%s%s","/kernel_fs/", d->name);
-    switch(m) {
-        case '/':
-            if(mkdir(fnbuf, 0777) && errno != EEXIST) {
-                warnmsg("Failed to create %s: %s", fnbuf, strerror(errno));
-            }
-            break;
-        case ' ':
-            if(verbose) printf("%s\n", fnbuf);
-            fd = open(fnbuf, O_WRONLY|O_CREAT, 0777);
-            if(fd < 0) {
-                warnmsg("Failed to create %s: %s", fnbuf, strerror(errno));
-            } else {
-                while(ri) {
-                    char buf[16384];
-					int w_cnt = 0;
-                    putblock(buf, sizeof(buf), &sz, ri);
-
-                    w_cnt = write(fd, buf, sz);
-					if(w_cnt != sz)
-						sys_errmsg_die("Failed to write files \n");
-                    ri = find_raw_inode(imagebuf, imagesize, d->ino, je32_to_cpu(ri->version));
-                }
-            }
-            break;
-		case '>':
+	switch (m)
+	{
+	case '/':
+		if (mkdir(fnbuf, 0777) && errno != EEXIST)
+		{
+			warnmsg("Failed to create %s: %s", fnbuf, strerror(errno));
+		}
+		break;
+	case ' ':
+		if (verbose)
+			printf("%s\n", fnbuf);
+		fd = open(fnbuf, O_WRONLY | O_CREAT, 0777);
+		if (fd < 0)
+		{
+			warnmsg("Failed to create %s: %s", fnbuf, strerror(errno));
+		}
+		else
+		{
+			while (ri)
 			{
-				char buf[256];
-				bzero(buf,256);
+				char buf[16384];
+				int w_cnt = 0;
 				putblock(buf, sizeof(buf), &sz, ri);
-				//buf save the name of the linked file
 
-				snprintf(current_path, sizeof(current_path), "%s%s/%s",extract_path, path, buf);
-				symlink(buf,fnbuf);
+				w_cnt = write(fd, buf, sz);
+				if (w_cnt != sz)
+					sys_errmsg_die("Failed to write files \n");
+				ri = find_raw_inode(imagebuf, imagesize, d->ino, je32_to_cpu(ri->version));
 			}
-			break;
-        default:
-            warnmsg("Not extracting special file %s", fnbuf);
-            break;
-    }
+		}
+		break;
+	case '>':
+	{
+		char buf[256];
+		bzero(buf, 256);
+		putblock(buf, sizeof(buf), &sz, ri);
+		//buf save the name of the linked file
 
-	if(fd >= 0)
+		snprintf(current_path, sizeof(current_path), "%s%s/%s", extract_path, path, buf);
+		symlink(buf, fnbuf);
+	}
+	break;
+	default:
+		warnmsg("Not extracting special file %s", fnbuf);
+		break;
+	}
+
+	if (fd >= 0)
 		close(fd);
-
 }
 
-void usage(char** argv) {
-    fprintf(stderr, "Usage: %s [-f imagefile] [-h help]\n", argv[0]);
-    exit(255);
+void usage(char **argv)
+{
+	fprintf(stderr, "Usage: %s -f <imagefile> -d <outputpath> [-h]\n", argv[0]);
+	exit(255);
 }
-
 
 /* usage example */
 #define BUFFER_SIZE 16384
@@ -946,58 +974,60 @@ int main(int argc, char **argv)
 {
 	int fd, opt, verbose = 0;
 	size_t filesize, bytes;
-    visitor v = NULL;
-	char  *imgfile = "image";
+	visitor v = NULL;
+	char *imgfile = "image";
 	char *buf = NULL;
-	if(argc < 2) {
-	    usage(argv);
+	if (argc < 2)
+	{
+		usage(argv);
 	}
 
-	while ((opt = getopt(argc, argv, "hf:d:")) > 0) {
-		switch (opt) {
-		    case 'h':
-		        usage(argv);
-		        break;
-			case 'f':
-				imgfile = optarg;
-				break;
-			default:
-				fprintf(stderr,
-						"Usage: %s <image> [-d|-f] < path >\n",
-						PROGRAM_NAME);
-				exit(EXIT_FAILURE);
+	while ((opt = getopt(argc, argv, "hf:d:")) > 0)
+	{
+		switch (opt)
+		{
+		case 'h':
+			usage(argv);
+			break;
+		case 'f':
+			imgfile = optarg;
+			break;
+		case 'd':
+			strncpy(extract_path, optarg, sizeof(extract_path));
+			break;
+		default:
+			usage(argv);
 		}
 	}
 
-
-    if(imgfile) {
-        fd = open(imgfile, O_RDONLY);
-        if (fd == -1)
-            sys_errmsg_die("%s", argv[optind]);
-    }
+	if (imgfile)
+	{
+		fd = open(imgfile, O_RDONLY);
+		if (fd == -1)
+			sys_errmsg_die("%s", argv[optind]);
+	}
 	else
 	{
-	     sys_errmsg_die("Empty File Name\n");
+		sys_errmsg_die("Empty File Name\n");
 	}
 
-    do_extract_dir();
+	do_extract_dir();
 	v = do_extract;
 
+	buf = xmalloc(BUFFER_SIZE);
+	if (!buf)
+		memset(buf, 0, BUFFER_SIZE);
 
-    buf = xmalloc(BUFFER_SIZE);
-	if(!buf)
-
-    memset(buf,0,BUFFER_SIZE);
-    while((bytes = read(fd, buf + filesize, BUFFER_SIZE)) == BUFFER_SIZE) {
-        filesize += bytes;
-        buf = xrealloc(buf, filesize + BUFFER_SIZE);
-    }
-    filesize += bytes;
-    printf("\nStart to extract the image, waiting...\n");
-    visit(buf, filesize, NULL, verbose, v);
-    printf("\nFinish extract Jffs2 %s \n",imgfile);
-    close(fd);
+	while ((bytes = read(fd, buf + filesize, BUFFER_SIZE)) == BUFFER_SIZE)
+	{
+		filesize += bytes;
+		buf = xrealloc(buf, filesize + BUFFER_SIZE);
+	}
+	filesize += bytes;
+	printf("\nStart to extract the image, waiting...\n");
+	visit(buf, filesize, NULL, verbose, v);
+	printf("\nFinish extract Jffs2 %s \n", imgfile);
+	close(fd);
 	free(buf);
 	exit(EXIT_SUCCESS);
 }
-

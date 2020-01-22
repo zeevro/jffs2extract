@@ -13,7 +13,7 @@ FILES = {'a': b'1\n',
          'b': b'2\n',
          'output': b'\xff' * 5000}
 
-DIRS = ['f']
+DIRS = {'f': set()}
 
 
 def main():
@@ -46,10 +46,15 @@ def main():
                     ret = 1
                     print(f'Content of "{fn}" is wrong!')
 
-        for d in DIRS:
+        for d, dirlist in DIRS:
             if not os.path.isdir(d):
                 ret = 1
                 print(f'Directory "{d}" does not exist!')
+                continue
+
+            if set(os.listdir(d)) != dirlist:
+                ret = 1
+                print(f'Content of directory "{d}" is wrong!')
 
         dirlist = set(FILES).union(DIRS)
         for fn in os.listdir():

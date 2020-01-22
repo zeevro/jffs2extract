@@ -1,0 +1,9 @@
+# binaries
+*
+!*.*
+
+# objects
+*.o
+
+# VS Code
+.vscode/

@@ -46,7 +46,7 @@ def main():
                     ret = 1
                     print(f'Content of "{fn}" is wrong!')
 
-        for d, dirlist in DIRS:
+        for d, dirlist in DIRS.items():
             if not os.path.isdir(d):
                 ret = 1
                 print(f'Directory "{d}" does not exist!')

@@ -1,4 +1,3 @@
-/* vi: set sw=4 ts=4: */
 /*
  * jffs2extract v0.2: Extract the contents of a JFFS2 image file.
  *
@@ -27,7 +26,7 @@
  *
  *
  *
- * Usage: jffs2extract {-t | -x} [-f imagefile] [-C path] [-v] [file1 [file2 ...]]
+ * Usage: jffs2extract -f imagefile [-d path]
  *
  * Options mimic the 'tar' command as close as possible.
  *
@@ -964,7 +963,7 @@ void do_extract(char *imagebuf, size_t imagesize, struct dir *d, char m, struct 
 
 void usage(char **argv)
 {
-	fprintf(stderr, "Usage: %s -f <imagefile> -d <outputpath> [-h]\n", argv[0]);
+	fprintf(stderr, "Usage: %s -f imagefile [-d path] [-h]\n", argv[0]);
 	exit(255);
 }
 
@@ -981,6 +980,8 @@ int main(int argc, char **argv)
 	{
 		usage(argv);
 	}
+
+	getcwd(extract_path, sizeof(extract_path));
 
 	while ((opt = getopt(argc, argv, "hf:d:")) > 0)
 	{

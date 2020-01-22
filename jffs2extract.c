@@ -32,7 +32,7 @@
  *
  */
 
-#define PROGRAM_NAME "jffs2reader"
+#define PROGRAM_NAME "jffs2extract"
 
 #include <stdint.h>
 #include <stdio.h>

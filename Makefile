@@ -9,8 +9,13 @@ all: $(BIN)
 
 $(BIN): $(OBJ)
 
+test: $(BIN)
+	python3 test.py
+
 install: $(BIN)
 	install -m 0755 jffs2extract /usr/bin
 
 clean:
 	$(RM) $(OBJ) $(BIN)
+
+.PHONY: all test install clean
